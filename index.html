@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TradeCall — On-Demand Trades for Realtors</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0f1923;
+    --navy-mid: #1a2634;
+    --navy-light: #243447;
+    --amber: #e8a847;
+    --amber-dim: #b8832e;
+    --cream: #f5f0e8;
+    --cream-dim: #e8e0d0;
+    --slate: #8fa3b8;
+    --slate-dim: #5a7289;
+    --green: #3dbd7e;
+    --red: #e05a5a;
+    --blue-active: #3a8fd1;
+    --white: #ffffff;
+    --glass: rgba(255,255,255,0.06);
+    --border: rgba(255,255,255,0.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--navy);
+    color: var(--cream);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── SCREEN MANAGER ── */
+  .screen { display: none; width: 100%; height: 100%; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* ── TOP NAV ── */
+  .topnav {
+    background: var(--navy-mid);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+  .logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    color: var(--amber);
+    letter-spacing: 0.02em;
+  }
+  .logo span { color: var(--cream); font-size: 12px; font-family: 'DM Mono', monospace; letter-spacing: 0.1em; text-transform: uppercase; margin-left: 8px; opacity: 0.5; }
+  .nav-right { display: flex; align-items: center; gap: 16px; }
+  .avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--amber), var(--amber-dim));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; color: var(--navy); cursor: pointer;
+  }
+  .status-pill {
+    background: rgba(61,189,126,0.15);
+    border: 1px solid rgba(61,189,126,0.3);
+    color: var(--green);
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.08em;
+  }
+  .nav-btn {
+    background: var(--amber);
+    color: var(--navy);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .nav-btn:hover { background: #f0b84d; transform: translateY(-1px); }
+
+  /* ── MAIN LAYOUT ── */
+  .main-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── MAP AREA ── */
+  .map-area {
+    flex: 1;
+    position: relative;
+    background: #1c2e3d;
+    overflow: hidden;
+  }
+
+  .map-svg {
+    width: 100%;
+    height: 100%;
+    opacity: 0.85;
+  }
+
+  /* Ventura map approximation */
+  .map-grid-line {
+    stroke: rgba(255,255,255,0.05);
+    stroke-width: 1;
+  }
+  .map-road {
+    stroke: rgba(255,255,255,0.12);
+    stroke-width: 2;
+    fill: none;
+  }
+  .map-road-major {
+    stroke: rgba(255,255,255,0.2);
+    stroke-width: 3.5;
+    fill: none;
+  }
+  .map-water {
+    fill: rgba(30,90,140,0.35);
+  }
+  .map-park {
+    fill: rgba(40,90,60,0.3);
+  }
+
+  /* Map overlay UI */
+  .map-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+  }
+  .map-overlay * { pointer-events: all; }
+
+  /* Job site pin */
+  .pin-job {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+  }
+  .pin-job-dot {
+    width: 14px; height: 14px;
+    background: var(--amber);
+    border: 2px solid var(--navy);
+    border-radius: 50%;
+    box-shadow: 0 0 0 4px rgba(232,168,71,0.25);
+  }
+  .pin-job-label {
+    background: var(--amber);
+    color: var(--navy);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-top: 4px;
+    white-space: nowrap;
+  }
+  .pin-job-stem {
+    width: 2px; height: 10px;
+    background: var(--amber);
+    order: -1;
+  }
+
+  /* Vendor pins */
+  .pin-vendor {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    animation: pulse-pin 2s ease-in-out infinite;
+  }
+  @keyframes pulse-pin {
+    0%, 100% { filter: drop-shadow(0 0 4px rgba(58,143,209,0.6)); }
+    50% { filter: drop-shadow(0 0 12px rgba(58,143,209,0.9)); }
+  }
+  .pin-vendor.top-ranked {
+    animation: pulse-pin-gold 2s ease-in-out infinite;
+  }
+  @keyframes pulse-pin-gold {
+    0%, 100% { filter: drop-shadow(0 0 4px rgba(232,168,71,0.6)); }
+    50% { filter: drop-shadow(0 0 14px rgba(232,168,71,1.0)); }
+  }
+  .pin-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 2px solid var(--blue-active);
+    background: var(--navy-mid);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--slate);
+    position: relative;
+  }
+  .pin-vendor.top-ranked .pin-avatar {
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+  .pin-badge {
+    position: absolute;
+    top: -4px; right: -4px;
+    width: 14px; height: 14px;
+    background: var(--amber);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    color: var(--navy);
+    font-weight: 700;
+    border: 1px solid var(--navy);
+  }
+  .pin-eta {
+    background: rgba(15,25,35,0.85);
+    border: 1px solid var(--border);
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--cream-dim);
+    white-space: nowrap;
+  }
+
+  /* Route lines */
+  .route-line {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  /* Map controls */
+  .map-controls {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .map-ctrl-btn {
+    width: 32px; height: 32px;
+    background: var(--navy-mid);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--slate);
+    font-size: 16px;
+    transition: all 0.1s;
+  }
+  .map-ctrl-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+  /* Search/filter bar on map */
+  .map-search-bar {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .map-search-input {
+    background: rgba(26,38,52,0.92);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: var(--cream);
+    width: 220px;
+    outline: none;
+  }
+  .map-search-input::placeholder { color: var(--slate-dim); }
+  .map-filter-tag {
+    background: rgba(26,38,52,0.92);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--slate);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.1s;
+  }
+  .map-filter-tag.active {
+    border-color: var(--amber);
+    color: var(--amber);
+    background: rgba(232,168,71,0.1);
+  }
+
+  /* ── RIGHT TRAY ── */
+  .right-tray {
+    width: 310px;
+    background: var(--navy-mid);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .tray-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .tray-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--slate);
+  }
+  .tray-count {
+    background: var(--amber);
+    color: var(--navy);
+    font-size: 11px;
+    font-weight: 700;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tray-scroll { overflow-y: auto; flex: 1; padding: 12px; }
+  .tray-scroll::-webkit-scrollbar { width: 4px; }
+  .tray-scroll::-webkit-scrollbar-track { background: transparent; }
+  .tray-scroll::-webkit-scrollbar-thumb { background: var(--navy-light); border-radius: 2px; }
+
+  /* Job card in tray */
+  .job-card {
+    background: var(--navy-light);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .job-card:hover { border-color: rgba(232,168,71,0.35); }
+  .job-card.active-selected { border-color: var(--amber); background: rgba(232,168,71,0.07); }
+
+  .job-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+  .job-type {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cream);
+  }
+  .job-status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-top: 4px;
+  }
+  .job-status-dot.urgent { background: var(--red); box-shadow: 0 0 6px rgba(224,90,90,0.6); }
+  .job-status-dot.active { background: var(--green); box-shadow: 0 0 6px rgba(61,189,126,0.6); }
+  .job-status-dot.scheduled { background: var(--blue-active); box-shadow: 0 0 6px rgba(58,143,209,0.4); }
+
+  .job-address {
+    font-size: 11px;
+    color: var(--slate);
+    margin-bottom: 6px;
+  }
+  .job-meta {
+    display: flex;
+    gap: 10px;
+  }
+  .job-meta-item {
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    color: var(--slate-dim);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .job-meta-item.highlight { color: var(--amber); }
+  .job-vendor-mini {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .vendor-mini-avatar {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--navy);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--amber);
+  }
+  .vendor-mini-info { flex: 1; }
+  .vendor-mini-name { font-size: 12px; font-weight: 500; color: var(--cream-dim); }
+  .vendor-mini-eta {
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: var(--green);
+  }
+
+  .tray-add-btn {
+    margin: 0 12px 12px;
+    padding: 11px;
+    background: rgba(232,168,71,0.12);
+    border: 1px dashed rgba(232,168,71,0.4);
+    border-radius: 8px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--amber);
+    font-weight: 500;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .tray-add-btn:hover { background: rgba(232,168,71,0.2); }
+
+  /* ── MODAL / OVERLAY ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,16,22,0.75);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal-card {
+    background: var(--navy-mid);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px;
+    width: 500px;
+    max-width: 94vw;
+    padding: 28px;
+    animation: modal-in 0.2s ease;
+  }
+  @keyframes modal-in {
+    from { transform: translateY(16px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    color: var(--cream);
+    margin-bottom: 4px;
+  }
+  .modal-subtitle {
+    font-size: 13px;
+    color: var(--slate);
+    margin-bottom: 24px;
+  }
+
+  .form-row { margin-bottom: 16px; }
+  .form-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--slate);
+    margin-bottom: 6px;
+    display: block;
+  }
+  .form-input, .form-textarea, .form-select {
+    width: 100%;
+    background: var(--navy-light);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: var(--cream);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-input:focus, .form-textarea:focus, .form-select:focus {
+    border-color: var(--amber);
+  }
+  .form-textarea { resize: none; height: 72px; }
+  .form-select { cursor: pointer; }
+  .form-select option { background: var(--navy-mid); }
+
+  .trade-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .trade-chip {
+    padding: 6px 14px;
+    background: var(--navy-light);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.12s;
+    color: var(--slate);
+  }
+  .trade-chip:hover { border-color: var(--slate); color: var(--cream); }
+  .trade-chip.selected {
+    background: rgba(232,168,71,0.15);
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+
+  .timeline-slider-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .timeline-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: var(--slate-dim);
+  }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--amber);
+    cursor: pointer;
+  }
+  .timeline-val {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--amber);
+    text-align: center;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .location-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .location-row .form-input { flex: 1; }
+  .gps-btn {
+    background: rgba(232,168,71,0.15);
+    border: 1px solid rgba(232,168,71,0.4);
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.1s;
+    color: var(--amber);
+  }
+  .gps-btn:hover { background: rgba(232,168,71,0.25); }
+
+  .modal-footer {
+    display: flex;
+    gap: 10px;
+    margin-top: 24px;
+    justify-content: flex-end;
+  }
+  .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--slate);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .btn-secondary:hover { border-color: var(--slate); color: var(--cream); }
+  .btn-primary {
+    background: var(--amber);
+    border: none;
+    color: var(--navy);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-primary:hover { background: #f0b84d; transform: translateY(-1px); }
+
+  /* ── VENDOR SELECTION MODAL ── */
+  .vendor-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 4px; }
+  .vendor-card {
+    background: var(--navy-light);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .vendor-card:hover { border-color: rgba(232,168,71,0.4); }
+  .vendor-card.top-pick {
+    border-color: rgba(232,168,71,0.5);
+    background: rgba(232,168,71,0.06);
+  }
+  .top-pick-badge {
+    position: absolute;
+    top: 0; right: 0;
+    background: var(--amber);
+    color: var(--navy);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 8px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-bottom-left-radius: 8px;
+  }
+  .vendor-avatar {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--navy);
+    border: 2px solid var(--navy-light);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--amber);
+    flex-shrink: 0;
+  }
+  .vendor-info { flex: 1; }
+  .vendor-name { font-size: 14px; font-weight: 600; color: var(--cream); margin-bottom: 2px; }
+  .vendor-trade { font-size: 11px; color: var(--slate); margin-bottom: 6px; }
+  .vendor-stars {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--amber);
+  }
+  .vendor-stars span { color: var(--slate); }
+  .vendor-right { text-align: right; }
+  .vendor-eta-big {
+    font-family: 'DM Mono', monospace;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--cream);
+  }
+  .vendor-eta-label { font-size: 10px; color: var(--slate); margin-bottom: 4px; }
+  .vendor-rate { font-size: 12px; color: var(--green); font-family: 'DM Mono', monospace; }
+  .vendor-select-btn {
+    background: var(--amber);
+    color: var(--navy);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 8px;
+    transition: all 0.12s;
+  }
+  .vendor-select-btn:hover { background: #f0b84d; }
+
+  /* Active job tracking panel */
+  .tracking-panel {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15,25,35,0.9);
+    border: 1px solid rgba(232,168,71,0.3);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    backdrop-filter: blur(8px);
+    min-width: 440px;
+    animation: slide-up 0.3s ease;
+  }
+  @keyframes slide-up {
+    from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+  }
+  .tracking-avatar {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    background: var(--navy-light);
+    border: 2px solid var(--amber);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--amber);
+    flex-shrink: 0;
+  }
+  .tracking-info { flex: 1; }
+  .tracking-name { font-size: 15px; font-weight: 600; color: var(--cream); margin-bottom: 2px; }
+  .tracking-trade { font-size: 12px; color: var(--slate); margin-bottom: 6px; }
+  .tracking-bar {
+    height: 3px;
+    background: var(--navy-light);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .tracking-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--amber), var(--green));
+    border-radius: 2px;
+    animation: progress 8s linear forwards;
+  }
+  @keyframes progress {
+    from { width: 20%; }
+    to { width: 72%; }
+  }
+  .tracking-right { text-align: right; }
+  .tracking-eta { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 500; color: var(--amber); }
+  .tracking-eta-label { font-size: 10px; color: var(--slate); text-transform: uppercase; letter-spacing: 0.08em; }
+  .tracking-rate { font-size: 12px; color: var(--green); font-family: 'DM Mono', monospace; margin-top: 4px; }
+
+  /* ── ANNOTATION LABELS (for sketch mode) ── */
+  .annot {
+    position: absolute;
+    background: rgba(232,168,71,0.15);
+    border: 1px dashed rgba(232,168,71,0.5);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 10px;
+    font-family: 'DM Mono', monospace;
+    color: var(--amber);
+    pointer-events: none;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  /* ── NOTIFICATION TOAST ── */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    background: var(--navy-mid);
+    border: 1px solid rgba(61,189,126,0.4);
+    border-radius: 10px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 200;
+    animation: toast-in 0.3s ease;
+    max-width: 320px;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast-icon {
+    width: 32px; height: 32px;
+    background: rgba(61,189,126,0.15);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .toast-text { font-size: 13px; color: var(--cream); }
+  .toast-sub { font-size: 11px; color: var(--slate); margin-top: 2px; }
+
+  /* ── SCREEN 3: TRANSACTION COMPLETE ── */
+  #screen-complete {
+    background: var(--navy);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 24px;
+    padding: 40px;
+  }
+  .complete-card {
+    background: var(--navy-mid);
+    border: 1px solid rgba(61,189,126,0.3);
+    border-radius: 20px;
+    padding: 40px;
+    width: 440px;
+    text-align: center;
+    max-width: 94vw;
+  }
+  .complete-icon {
+    width: 64px; height: 64px;
+    background: rgba(61,189,126,0.15);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    margin: 0 auto 20px;
+    border: 1px solid rgba(61,189,126,0.3);
+  }
+  .complete-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px;
+    margin-bottom: 6px;
+  }
+  .complete-sub { font-size: 14px; color: var(--slate); margin-bottom: 28px; }
+
+  .invoice-block {
+    background: var(--navy-light);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: left;
+    margin-bottom: 20px;
+  }
+  .invoice-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 13px;
+    color: var(--slate);
+    border-bottom: 1px solid var(--border);
+  }
+  .invoice-row:last-child { border-bottom: none; }
+  .invoice-row.total { color: var(--cream); font-weight: 600; font-size: 16px; margin-top: 4px; }
+  .invoice-row .val { font-family: 'DM Mono', monospace; color: var(--cream); }
+  .invoice-row.total .val { color: var(--amber); font-size: 18px; }
+
+  .star-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .star-btn {
+    font-size: 28px;
+    cursor: pointer;
+    color: var(--slate-dim);
+    transition: all 0.1s;
+    line-height: 1;
+  }
+  .star-btn.lit { color: var(--amber); }
+  .star-btn:hover { transform: scale(1.2); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════ SCREEN 1: DASHBOARD ═══ -->
+<div id="screen-dashboard" class="screen active">
+
+  <!-- Top nav -->
+  <div class="topnav">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="logo">TradeCall<span>Beta</span></div>
+    </div>
+    <div class="nav-right">
+      <div class="status-pill">● Ventura, CA</div>
+      <button class="nav-btn" onclick="openRequestModal()">+ New Request</button>
+      <div class="avatar">JM</div>
+    </div>
+  </div>
+
+  <!-- Main layout -->
+  <div class="main-layout">
+
+    <!-- MAP -->
+    <div class="map-area" id="map-area">
+
+      <!-- SVG map - stylized Ventura grid -->
+      <svg class="map-svg" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice">
+        <!-- Background base -->
+        <rect width="900" height="600" fill="#1c2e3d"/>
+
+        <!-- Grid -->
+        <line x1="0" y1="100" x2="900" y2="100" class="map-grid-line"/>
+        <line x1="0" y1="200" x2="900" y2="200" class="map-grid-line"/>
+        <line x1="0" y1="300" x2="900" y2="300" class="map-grid-line"/>
+        <line x1="0" y1="400" x2="900" y2="400" class="map-grid-line"/>
+        <line x1="0" y1="500" x2="900" y2="500" class="map-grid-line"/>
+        <line x1="150" y1="0" x2="150" y2="600" class="map-grid-line"/>
+        <line x1="300" y1="0" x2="300" y2="600" class="map-grid-line"/>
+        <line x1="450" y1="0" x2="450" y2="600" class="map-grid-line"/>
+        <line x1="600" y1="0" x2="600" y2="600" class="map-grid-line"/>
+        <line x1="750" y1="0" x2="750" y2="600" class="map-grid-line"/>
+
+        <!-- Pacific Ocean (bottom band) -->
+        <rect x="0" y="520" width="900" height="80" class="map-water" rx="0"/>
+        <text x="440" y="560" fill="rgba(255,255,255,0.18)" font-family="DM Mono, monospace" font-size="11" text-anchor="middle" letter-spacing="3">PACIFIC OCEAN</text>
+
+        <!-- Ventura Harbor area -->
+        <ellipse cx="110" cy="530" rx="80" ry="30" class="map-water"/>
+
+        <!-- Parks -->
+        <rect x="340" y="120" width="80" height="60" class="map-park" rx="4"/>
+        <rect x="600" y="240" width="60" height="80" class="map-park" rx="4"/>
+
+        <!-- Major roads - 101 freeway (diagonal) -->
+        <path d="M0,380 Q200,330 400,310 Q600,290 900,260" class="map-road-major" stroke="#4a6a85"/>
+        <text x="160" y="350" fill="rgba(255,255,255,0.25)" font-family="DM Mono, monospace" font-size="9" transform="rotate(-5,160,350)">US-101</text>
+
+        <!-- Main Ave / Thompson Blvd -->
+        <line x1="0" y1="460" x2="900" y2="460" class="map-road-major"/>
+        <text x="30" y="455" fill="rgba(255,255,255,0.2)" font-family="DM Mono, monospace" font-size="8">MAIN ST</text>
+
+        <!-- Victoria Ave -->
+        <line x1="400" y1="0" x2="420" y2="600" class="map-road-major"/>
+        <text x="406" y="30" fill="rgba(255,255,255,0.2)" font-family="DM Mono, monospace" font-size="8">VICTORIA AVE</text>
+
+        <!-- Secondary roads -->
+        <line x1="0" y1="180" x2="900" y2="180" class="map-road"/>
+        <line x1="0" y1="260" x2="900" y2="260" class="map-road"/>
+        <line x1="0" y1="360" x2="900" y2="360" class="map-road"/>
+        <line x1="200" y1="0" x2="200" y2="600" class="map-road"/>
+        <line x1="550" y1="0" x2="550" y2="600" class="map-road"/>
+        <line x1="700" y1="0" x2="700" y2="600" class="map-road"/>
+
+        <!-- Ventura label -->
+        <text x="60" y="50" fill="rgba(255,255,255,0.12)" font-family="Playfair Display, serif" font-size="28" font-weight="600" letter-spacing="4">VENTURA</text>
+      </svg>
+
+      <!-- Map overlay -->
+      <div class="map-overlay">
+
+        <!-- Search bar -->
+        <div class="map-search-bar">
+          <input class="map-search-input" placeholder="Search address or area..." value="Ventura, CA">
+          <div class="map-filter-tag active">All</div>
+          <div class="map-filter-tag">Urgent</div>
+          <div class="map-filter-tag">Scheduled</div>
+        </div>
+
+        <!-- Job site pin #1 - Building Inspector -->
+        <div class="pin-job" style="left: 43%; top: 52%">
+          <div class="pin-job-stem"></div>
+          <div class="pin-job-dot"></div>
+          <div class="pin-job-label">🏠 4411 Harbor Blvd</div>
+        </div>
+
+        <!-- Job site pin #2 - Plumber -->
+        <div class="pin-job" style="left: 62%; top: 43%">
+          <div class="pin-job-stem"></div>
+          <div class="pin-job-dot"></div>
+          <div class="pin-job-label">🔧 2218 Victoria Ave</div>
+        </div>
+
+        <!-- Vendor pin 1 - Top ranked inspector -->
+        <div class="pin-vendor top-ranked" style="left: 38%; top: 38%" onclick="openVendorModal()">
+          <div class="pin-avatar">TK<div class="pin-badge">1</div></div>
+          <div class="pin-eta">8 min</div>
+        </div>
+
+        <!-- Vendor pin 2 -->
+        <div class="pin-vendor" style="left: 52%; top: 46%" onclick="openVendorModal()">
+          <div class="pin-avatar">RB<div class="pin-badge">2</div></div>
+          <div class="pin-eta">14 min</div>
+        </div>
+
+        <!-- Vendor pin 3 (plumber) -->
+        <div class="pin-vendor" style="left: 67%; top: 35%" onclick="openVendorModal()">
+          <div class="pin-avatar">MD</div>
+          <div class="pin-eta">11 min</div>
+        </div>
+
+        <!-- Tracking panel -->
+        <div class="tracking-panel" id="tracking-panel" style="display:none;">
+          <div class="tracking-avatar">TK</div>
+          <div class="tracking-info">
+            <div class="tracking-name">Tom Kiernan — Building Inspector</div>
+            <div class="tracking-trade">State Lic. #CI-8843 · 4.9 ★ · 214 jobs</div>
+            <div class="tracking-bar">
+              <div class="tracking-bar-fill"></div>
+            </div>
+          </div>
+          <div class="tracking-right">
+            <div class="tracking-eta">8 min</div>
+            <div class="tracking-eta-label">ETA</div>
+            <div class="tracking-rate">$175/hr</div>
+          </div>
+        </div>
+
+        <!-- Annotation labels (sketch mode) -->
+        <div class="annot" style="left:36%;top:28%">① vendor en route</div>
+        <div class="annot" style="left:59%;top:28%">② responding</div>
+        <div class="annot" style="left:42%;top:58%">job site pin</div>
+
+        <!-- Map controls -->
+        <div class="map-controls">
+          <div class="map-ctrl-btn">+</div>
+          <div class="map-ctrl-btn">−</div>
+          <div class="map-ctrl-btn">◎</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- RIGHT TRAY -->
+    <div class="right-tray">
+      <div class="tray-header">
+        <div class="tray-title">Active Requests</div>
+        <div class="tray-count">2</div>
+      </div>
+      <div class="tray-scroll">
+
+        <!-- Job card 1 - active/matched -->
+        <div class="job-card active-selected" onclick="showTracking()">
+          <div class="job-card-top">
+            <div class="job-type">🔍 Building Inspector</div>
+            <div class="job-status-dot urgent"></div>
+          </div>
+          <div class="job-address">4411 Harbor Blvd, Ventura</div>
+          <div class="job-meta">
+            <div class="job-meta-item highlight">⚡ Urgent</div>
+            <div class="job-meta-item">📍 0.4 mi</div>
+          </div>
+          <div class="job-vendor-mini">
+            <div class="vendor-mini-avatar">TK</div>
+            <div class="vendor-mini-info">
+              <div class="vendor-mini-name">Tom Kiernan · 4.9 ★</div>
+              <div class="vendor-mini-eta">En route · 8 min ETA</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Job card 2 - pending match -->
+        <div class="job-card">
+          <div class="job-card-top">
+            <div class="job-type">🔧 Plumber</div>
+            <div class="job-status-dot scheduled"></div>
+          </div>
+          <div class="job-address">2218 Victoria Ave, Ventura</div>
+          <div class="job-meta">
+            <div class="job-meta-item">🕐 Today · 2–4pm</div>
+            <div class="job-meta-item">3 responding</div>
+          </div>
+          <div class="job-vendor-mini">
+            <div style="font-size:11px;color:var(--slate);padding:4px 0;">Select from 3 vendors →</div>
+          </div>
+        </div>
+
+      </div>
+      <div class="tray-add-btn" onclick="openRequestModal()">+ New Trade Request</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ SCREEN 3: COMPLETE ═══ -->
+<div id="screen-complete" class="screen">
+  <div class="topnav" style="position:fixed;top:0;left:0;right:0;">
+    <div class="logo">TradeCall<span>Beta</span></div>
+    <div class="nav-right">
+      <div class="status-pill">● Ventura, CA</div>
+      <div class="avatar">JM</div>
+    </div>
+  </div>
+
+  <div class="complete-card" style="margin-top:52px;">
+    <div class="complete-icon">✓</div>
+    <div class="complete-title">Job Complete</div>
+    <div class="complete-sub">Building Inspection · 4411 Harbor Blvd</div>
+
+    <div class="invoice-block">
+      <div class="invoice-row">
+        <span>Tom Kiernan — Building Inspector</span>
+        <span></span>
+      </div>
+      <div class="invoice-row">
+        <span>2.5 hrs @ $175/hr</span>
+        <span class="val">$437.50</span>
+      </div>
+      <div class="invoice-row">
+        <span>Platform fee</span>
+        <span class="val">$21.88</span>
+      </div>
+      <div class="invoice-row total">
+        <span>Total</span>
+        <span class="val">$459.38</span>
+      </div>
+    </div>
+
+    <div style="font-size:14px;color:var(--slate);margin-bottom:12px;">Rate your experience</div>
+    <div class="star-row" id="stars">
+      <div class="star-btn" onclick="rateStar(1)">★</div>
+      <div class="star-btn" onclick="rateStar(2)">★</div>
+      <div class="star-btn" onclick="rateStar(3)">★</div>
+      <div class="star-btn" onclick="rateStar(4)">★</div>
+      <div class="star-btn" onclick="rateStar(5)">★</div>
+    </div>
+
+    <div style="display:flex;gap:10px;">
+      <button class="btn-secondary" style="flex:1;" onclick="goBack()">← Dashboard</button>
+      <button class="btn-primary" style="flex:1;">Pay & Close</button>
+    </div>
+    <div style="font-size:11px;color:var(--slate-dim);margin-top:14px;line-height:1.5;">
+      Invoice sent to your email · Stored in CRM · Vendor notified
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ REQUEST MODAL ═══ -->
+<div class="modal-overlay" id="modal-request">
+  <div class="modal-card">
+    <div class="modal-title">New Trade Request</div>
+    <div class="modal-subtitle">Takes about 60 seconds · We'll match you in real time</div>
+
+    <div class="form-row">
+      <label class="form-label">Trade Type</label>
+      <div class="trade-chips">
+        <div class="trade-chip selected">Building Inspector</div>
+        <div class="trade-chip">Plumber</div>
+        <div class="trade-chip">Electrician</div>
+        <div class="trade-chip">HVAC</div>
+        <div class="trade-chip">General Contractor</div>
+        <div class="trade-chip">Roofer</div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="form-label">Brief Description</label>
+      <textarea class="form-textarea" placeholder="e.g. Pre-close inspection needed. 3BR/2BA single family, ~1,800 sq ft, 1987 build..."></textarea>
+    </div>
+
+    <div class="form-row">
+      <label class="form-label">Timeline</label>
+      <div class="timeline-slider-wrap">
+        <input type="range" min="0" max="3" value="0" id="timeline-range" oninput="updateTimeline(this.value)">
+        <div class="timeline-labels">
+          <span>Urgent</span>
+          <span>Today</span>
+          <span>This week</span>
+          <span>Schedule</span>
+        </div>
+        <div class="timeline-val" id="timeline-val">⚡ Urgent — Send now</div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <label class="form-label">Job Location</label>
+      <div class="location-row">
+        <input class="form-input" placeholder="Enter address" value="4411 Harbor Blvd, Ventura, CA">
+        <div class="gps-btn" title="Use current GPS">📍</div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-request')">Cancel</button>
+      <button class="btn-primary" onclick="submitRequest()">Dispatch Request →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ VENDOR SELECTION MODAL ═══ -->
+<div class="modal-overlay" id="modal-vendor">
+  <div class="modal-card">
+    <div class="modal-title">3 Inspectors Responding</div>
+    <div class="modal-subtitle">Ranked by rating · Tap to select and engage</div>
+
+    <div class="vendor-list">
+
+      <div class="vendor-card top-pick">
+        <div class="top-pick-badge">Top Pick</div>
+        <div class="vendor-avatar">TK</div>
+        <div class="vendor-info">
+          <div class="vendor-name">Tom Kiernan</div>
+          <div class="vendor-trade">Building Inspector · Lic. #CI-8843</div>
+          <div class="vendor-stars">★★★★★ <span>4.9 (214 jobs)</span></div>
+          <button class="vendor-select-btn" onclick="selectVendor()">Select Tom →</button>
+        </div>
+        <div class="vendor-right">
+          <div class="vendor-eta-label">ETA</div>
+          <div class="vendor-eta-big">8 min</div>
+          <div class="vendor-rate">$175/hr</div>
+        </div>
+      </div>
+
+      <div class="vendor-card">
+        <div class="vendor-avatar" style="color:var(--slate)">RB</div>
+        <div class="vendor-info">
+          <div class="vendor-name">Rosa Bateman</div>
+          <div class="vendor-trade">Building Inspector · Lic. #CI-5521</div>
+          <div class="vendor-stars">★★★★☆ <span>4.7 (88 jobs)</span></div>
+          <button class="vendor-select-btn" style="background:var(--navy-light);color:var(--cream);border:1px solid var(--border);" onclick="selectVendor()">Select Rosa</button>
+        </div>
+        <div class="vendor-right">
+          <div class="vendor-eta-label">ETA</div>
+          <div class="vendor-eta-big">14 min</div>
+          <div class="vendor-rate">$155/hr</div>
+        </div>
+      </div>
+
+      <div class="vendor-card">
+        <div class="vendor-avatar" style="color:var(--slate)">DP</div>
+        <div class="vendor-info">
+          <div class="vendor-name">Dave Patel</div>
+          <div class="vendor-trade">Building Inspector · Lic. #CI-7730</div>
+          <div class="vendor-stars">★★★★☆ <span>4.5 (61 jobs)</span></div>
+          <button class="vendor-select-btn" style="background:var(--navy-light);color:var(--cream);border:1px solid var(--border);" onclick="selectVendor()">Select Dave</button>
+        </div>
+        <div class="vendor-right">
+          <div class="vendor-eta-label">ETA</div>
+          <div class="vendor-eta-big">21 min</div>
+          <div class="vendor-rate">$160/hr</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal('modal-vendor')">Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <div class="toast-icon">📡</div>
+  <div>
+    <div class="toast-text">Request dispatched!</div>
+    <div class="toast-sub">Matching inspectors in Ventura...</div>
+  </div>
+</div>
+
+<script>
+  // Screen management
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  // Modal
+  function openRequestModal() { document.getElementById('modal-request').classList.add('open'); }
+  function openVendorModal() { document.getElementById('modal-vendor').classList.add('open'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  // Timeline slider
+  const timelineLabels = [
+    '⚡ Urgent — Send now',
+    '🕐 Today — within hours',
+    '📅 This week',
+    '🗓 Schedule a date & time'
+  ];
+  function updateTimeline(val) {
+    document.getElementById('timeline-val').textContent = timelineLabels[val];
+  }
+
+  // Submit request
+  function submitRequest() {
+    closeModal('modal-request');
+    showToast('Request dispatched!', 'Matching inspectors in Ventura...');
+    setTimeout(() => openVendorModal(), 2200);
+  }
+
+  // Select vendor
+  function selectVendor() {
+    closeModal('modal-vendor');
+    showTracking();
+    showToast('Tom Kiernan confirmed!', 'En route · 8 min ETA');
+  }
+
+  // Tracking panel
+  function showTracking() {
+    const panel = document.getElementById('tracking-panel');
+    panel.style.display = 'flex';
+  }
+
+  // Toast
+  function showToast(text, sub) {
+    const toast = document.getElementById('toast');
+    toast.querySelector('.toast-text').textContent = text;
+    toast.querySelector('.toast-sub').textContent = sub;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3500);
+  }
+
+  // Complete screen nav
+  function goBack() { showScreen('screen-dashboard'); }
+
+  // Star rating
+  function rateStar(n) {
+    const stars = document.querySelectorAll('.star-btn');
+    stars.forEach((s, i) => {
+      s.classList.toggle('lit', i < n);
+    });
+  }
+
+  // Trade chips
+  document.querySelectorAll('.trade-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      document.querySelectorAll('.trade-chip').forEach(c => c.classList.remove('selected'));
+      this.classList.add('selected');
+    });
+  });
+
+  // Filter tags
+  document.querySelectorAll('.map-filter-tag').forEach(tag => {
+    tag.addEventListener('click', function() {
+      document.querySelectorAll('.map-filter-tag').forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+
+  // Demo: show complete screen via double-click on first job card
+  document.querySelector('.job-card.active-selected').addEventListener('dblclick', () => {
+    showScreen('screen-complete');
+  });
+
+  // Close modals on overlay click
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === this) this.classList.remove('open');
+    });
+  });
+</script>
+
+</body>
+</html>
